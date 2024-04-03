@@ -1,0 +1,472 @@
+//---------------------------------------------------------------------------
+#include <windows.h>
+#include <vcl.h>
+#include <vector>
+#include <cmath>
+#include <iostream>
+#include <string>
+#include <chrono>
+#include <thread>
+#include<windows.h>
+#pragma hdrstop
+
+#include "UFuzzy.h"
+//---------------------------------------------------------------------------
+#pragma package(smart_init)
+#pragma link "VaClasses"
+#pragma link "VaComm"
+#pragma resource "*.dfm"
+
+TFmFuzzy *FmFuzzy;
+
+//---------------------------------------------------------------------
+
+std::vector <float> tip_cheap(4561);
+std::vector <float> tip_average(4561);
+std::vector <float> tip_gorgeous(4561);
+std::vector <float> tip(4561);
+
+float x=0;
+float y=0;
+float posicao_do_grafico = 0;
+float posicao_do_grafico_food = 0;
+float posicao_do_grafico_service = 0;
+
+// Variáveis Fuzzy.
+float fiService = 0;
+float fiFood    = 0;
+float foTip     = 0;
+float fop_rule1 = 0;
+float fop_rule2 = 0;
+float fop_rule3 = 0;
+
+// Variáveis de auxilio ao cálculo da centróide.
+float sum = 0;
+float total_area = 0;
+float gorjeta = 0;
+
+// Entradas para o sistema.
+float service = 23;
+float food = 0;
+
+
+//---------------------------------------------------------------------
+
+// Função Triangular
+float trimf(float x, float a, float b, float c)
+{
+	float ua = 0;
+
+	if (x <= a)
+		ua = 0;
+	else if ((a < x) && (x <= b))
+		ua = ((x - a) / (b - a));
+	else if ((b < x) && (x <= c))
+		ua = ((x - c) / (b - c));
+	else if (x > c)
+		ua = 0;
+
+	return(ua);
+}
+
+//---------------------------------------------------------------------
+
+// Função Trapezoidal
+float trapmf(float x, float a, float b, float c, float d)
+{
+	float ua = 0;
+
+	if (x <= a)
+		ua = 0;
+	else if ((a < x) && (x <= b))
+		ua = ((x - a) / (b - a));
+	else if ((b <= x) && (x <= c))
+		ua = 1;
+	else if ((c < x) && (x <= d))
+		ua = ((d - x) / (d - c));
+	else if (x > d)
+		ua = 0;
+
+	return(ua);
+}
+
+//---------------------------------------------------------------------
+
+float min_val(float a, float b)
+{
+	if (a < b)
+		return a;
+	else
+		return b;
+}
+
+//---------------------------------------------------------------------
+
+float max_val(float a, float b)
+{
+	if (a > b)
+		return a;
+	else
+		return b;
+}
+
+
+//---------------------------------------------------------------------------
+
+void Fuzzy()
+{
+
+	// 1ª regra - If service is poor or food is rancid, tip is cheap
+	if ((service >= 23 && service <= 27) || (food >= 0 && food <= 25))
+	{
+		// Fuzzificar as entradas.
+		fiService = trapmf(service, 22, 23, 24, 27);
+		fiFood    = trapmf(food,-1, 0, 5, 15);
+
+		// Aplicação dos operadores Fuzzy.
+		fop_rule1 = max_val(fiService,fiFood);
+		// Aplicação do Método de Implicação (valores mínimos).
+		x=0;
+		y=0;
+		for (int a=0; a<=4560; a++)
+		{
+			y = trimf(x,0,760,1520);
+
+			if (y >= fop_rule1)
+			{
+				tip_cheap.at(a) = fop_rule1;
+			}
+			else
+			{
+				tip_cheap.at(a) = y;
+			}
+
+			x=x+1;
+		}
+	}
+
+
+
+
+	// 2.1ª regra - If service is good, tip is average
+	if (service >= 24 && service <= 32)
+	{
+		// Fuzzificar as entradas.
+		fiService = trimf(service, 24, 28, 32);
+
+		// Aplicação dos operadores Fuzzy.
+		fop_rule2 = max_val(fiService,0);
+
+		 // Aplicação do Método de Implicação (valores mínimos).
+		x=0;
+		y=0;
+		for (int a=0; a<=4560; a++)
+		{
+			y = trimf(x,1520,2280,3040);
+
+			if (y >= fop_rule2)
+			{
+				tip_average.at(a) = fop_rule2;
+			}
+			else
+			{
+				tip_average.at(a) = y;
+			}
+
+			x=x+1;
+		}
+	}
+
+
+
+	// 3.1ª regra - If service is excellent or food is delicious, tip is generous
+	if ((service >= 29 && service <= 33) || (food >= 25 && food <= 50))
+	{
+		// Fuzzificar as entradas.
+		fiService = trapmf(service,29, 32, 33, 34);
+		fiFood    = trapmf(food,35, 45, 50, 51);
+
+		// Aplicação dos operadores Fuzzy.
+		fop_rule3 = max_val(fiService,fiFood);
+
+		// Aplicação do Método de Implicação (valores mínimos).
+		x=0;
+		y=0;
+		for (int a=0; a<=4560; a++)
+		{
+			y = trimf(x,3040,3800,4560);
+
+			if (y >= fop_rule3)
+			{
+				tip_gorgeous.at(a) = fop_rule3;
+			}
+			else
+			{
+				tip_gorgeous.at(a) = y;
+			}
+
+			x=x+1;
+		}
+	}
+
+
+
+
+	// Aplicação do Método de Agregação.
+	for (int a=0; a<=4560; a++)
+	{
+		if (a >= 0 && a <= 1520)
+		{
+			tip.at(a) = tip_cheap.at(a);
+		}
+
+		if (a >= 1520 && a <= 3040)
+		{
+			tip.at(a) = tip_average.at(a);
+		}
+
+		if (a > 3040 && a <= 4560)
+		{
+			tip.at(a) = tip_gorgeous.at(a);
+		}
+	}
+
+
+	// Implicação dos antecedentes pelo consequente.
+	x = 0;
+	total_area = 0;
+	sum = 0;
+	for (int a=0; a<=4560; a++)
+	{
+		total_area = total_area + tip.at(a);
+		sum = sum + (x * tip.at(a));
+
+		x=x+1;
+	}
+
+	// Cálculo da Centróide.
+	gorjeta = sum/total_area;
+	FmFuzzy->Label1->Caption = FloatToStrF(gorjeta,ffFixed,10,0);
+	posicao_do_grafico = gorjeta;
+
+
+
+	for (int a=0; a<=4560; a++)
+	{
+		FmFuzzy->Chart4->Series[0]->YValues->Value[a] = tip.at(a);
+	}
+
+	FmFuzzy->Chart3->Refresh();
+	FmFuzzy->Chart4->Refresh();
+}
+
+
+//---------------------------------------------------------------------------
+
+__fastcall TFmFuzzy::TFmFuzzy(TComponent* Owner)
+	: TForm(Owner)
+{
+
+
+
+
+}
+//---------------------------------------------------------------------------
+void __fastcall TFmFuzzy::FormCreate(TObject *Sender)
+{
+	// Expande o gráfico para comportar a quantidade de amostras contidas em max_tela.
+	for (unsigned int a = 0; a <= 10; a++)
+	{
+		Chart1->Series[0]->AddY(0);
+		Chart1->Series[1]->AddY(0);
+		Chart1->Series[2]->AddY(0);
+	}
+	for (unsigned int a = 0; a <= 50; a++)
+	{
+		Chart2->Series[0]->AddY(0);
+		Chart2->Series[1]->AddY(0);
+	}
+	for (unsigned int a = 0; a <= 4560; a++)
+	{
+		Chart3->Series[0]->AddY(0);
+		Chart3->Series[1]->AddY(0);
+		Chart3->Series[2]->AddY(0);
+		Chart4->Series[0]->AddY(0);
+	}
+
+	// Atualiza o chart.
+	Chart1->Refresh();
+	Chart2->Refresh();
+	Chart3->Refresh();
+	Chart4->Refresh();
+
+
+	x = 23; // Inicializa x em 21 para corresponder ao início do seu eixo X
+	for (int a = 0; a <= 10; a++) { // Itera do valor inicial até 10 passos à frente
+		// Calcula os valores de pertinência com base em 'x'
+		// As funções abaixo devem ser ajustadas para refletir as curvas da sua imagem
+		Chart1->Series[0]->AddXY(x, trapmf(x, 22, 23, 24, 27)); // Substitua pelos parâmetros corretos
+		Chart1->Series[1]->AddXY(x, trimf(x, 24, 28, 32));      // Substitua pelos parâmetros corretos
+		Chart1->Series[2]->AddXY(x, trapmf(x, 29, 32, 33, 34)); // Substitua pelos parâmetros corretos
+
+		x++; // Incrementa x a cada iteração para mover ao longo do eixo X
+	}
+
+
+
+	x = 0;
+	for (int a = 0; a <= 50; a++) {
+		Chart2->Series[0]->YValues->Value[a] = trapmf(x, -1, 0, 5, 15);
+		Chart2->Series[1]->YValues->Value[a] = trapmf(x, 35, 45, 50, 51);
+		x=x+1;
+	}
+
+	x=0;
+	for (int a=0; a<=4560; a++)
+	{
+		Chart3->Series[0]->YValues->Value[a] = trimf(x,0,760,1520);
+		Chart3->Series[1]->YValues->Value[a] = trimf(x,1520,2280,3040);
+		Chart3->Series[2]->YValues->Value[a] = trimf(x,3040,3800,4560);
+		x=x+1;
+	}
+}
+//---------------------------------------------------------------------------
+void __fastcall TFmFuzzy::tbServiceChange(TObject *Sender)
+{
+	service = tbService->Position ;
+	posicao_do_grafico_service = tbService->Position ;
+	Label5->Caption = (static_cast<int>(posicao_do_grafico_service));
+
+
+	Chart1->Refresh();
+
+	Fuzzy();
+}
+//---------------------------------------------------------------------------
+void __fastcall TFmFuzzy::tbFoodChange(TObject *Sender)
+{
+	tbFood->Position = ((tbFood->Position) / 5) * 5;
+	food = tbFood->Position;
+	posicao_do_grafico_food = tbFood->Position;
+	Label6->Caption = tbFood->Position;
+
+	Chart2->Refresh();
+
+	Fuzzy();
+}
+//---------------------------------------------------------------------------
+void __fastcall TFmFuzzy::Chart4AfterDraw(TObject *Sender)
+{
+	double xi, xf, yi, yf;
+
+	xi=Chart4->BottomAxis->CalcPosValue(posicao_do_grafico);
+	yi=Chart4->LeftAxis->CalcPosValue(Chart4->LeftAxis->Minimum)+5;
+	xf=Chart4->BottomAxis->CalcPosValue(posicao_do_grafico)+1;
+	yf=Chart4->LeftAxis->CalcPosValue(Chart4->LeftAxis->Maximum)-5;
+	Chart4->Canvas->Pen->Style=psSolid;
+	Chart4->Canvas->Pen->Color=clBlack;
+	Chart4->Canvas->Rectangle(xi,yi,xf,yf);
+}
+//---------------------------------------------------------------------------
+void __fastcall TFmFuzzy::Chart1AfterDraw(TObject *Sender)
+{
+	double xi, xf, yi, yf;
+
+	xi=Chart1->BottomAxis->CalcPosValue(posicao_do_grafico_service);
+	yi=Chart1->LeftAxis->CalcPosValue(Chart1->LeftAxis->Minimum)+5;
+	xf=Chart1->BottomAxis->CalcPosValue(posicao_do_grafico_service)+1;
+	yf=Chart1->LeftAxis->CalcPosValue(Chart1->LeftAxis->Maximum)-5;
+	Chart1->Canvas->Pen->Style=psSolid;
+	Chart1->Canvas->Pen->Color=clBlack;
+	Chart1->Canvas->Rectangle(xi,yi,xf,yf);
+}
+//---------------------------------------------------------------------------
+
+void __fastcall TFmFuzzy::Chart2AfterDraw(TObject *Sender)
+{
+	double xi, xf, yi, yf;
+
+	xi=Chart2->BottomAxis->CalcPosValue(posicao_do_grafico_food);
+	yi=Chart2->LeftAxis->CalcPosValue(Chart2->LeftAxis->Minimum)+5;
+	xf=Chart2->BottomAxis->CalcPosValue(posicao_do_grafico_food)+1;
+	yf=Chart2->LeftAxis->CalcPosValue(Chart2->LeftAxis->Maximum)-5;
+	Chart2->Canvas->Pen->Style=psSolid;
+	Chart2->Canvas->Pen->Color=clBlack;
+	Chart2->Canvas->Rectangle(xi,yi,xf,yf);
+}
+//---------------------------------------------------------------------------
+
+void __fastcall TFmFuzzy::Chart3AfterDraw(TObject *Sender)
+{
+	double xi, xf, yi, yf;
+
+	xi=Chart3->BottomAxis->CalcPosValue(posicao_do_grafico);
+	yi=Chart3->LeftAxis->CalcPosValue(Chart3->LeftAxis->Minimum)+5;
+	xf=Chart3->BottomAxis->CalcPosValue(posicao_do_grafico)+1;
+	yf=Chart3->LeftAxis->CalcPosValue(Chart3->LeftAxis->Maximum)-5;
+	Chart3->Canvas->Pen->Style=psSolid;
+	Chart3->Canvas->Pen->Color=clBlack;
+	Chart3->Canvas->Rectangle(xi,yi,xf,yf);
+}
+//---------------------------------------------------------------------------
+
+
+// PORTA SERIAL ---------------------------------------------------------
+
+void __fastcall TFmFuzzy::VaComm1RxChar(TObject *Sender, int Count)
+{
+	if (CheckBox1->Checked == false) {
+		
+	char *buffer = new char[Count+1];
+	memset(buffer, 0, Count+1); // Limpa o buffer
+	VaComm1->ReadBuf(buffer, Count); // Lê os dados recebidos
+	AnsiString data(buffer, Count); // Cria uma AnsiString com os dados recebidos
+	Memo1->Lines->Add(data); // Adicione os dados recebidos ao TMemo
+	delete [] buffer; // Libera o buffer
+
+    	AnsiString strDistance, strTemperature;
+	int indexD = data.Pos("D");
+	int indexT = data.Pos("T");
+	if (indexD > 0 && indexT > indexD) {
+		strDistance = data.SubString(indexD + 1, indexT - indexD - 1);
+		strTemperature = data.SubString(indexT + 1, data.Length() - indexT);
+		// Converta e use os valores de distância e temperatura como necessário
+		// Exemplo: Convertendo para float e exibindo no Memo1
+		float distance = atof(strDistance.c_str());
+		float temperature = atof(strTemperature.c_str());
+
+
+	food = distance;
+	posicao_do_grafico_food = food;
+	Label7->Caption = FloatToStrF(food,ffFixed,10,2);
+
+	service = temperature;
+	posicao_do_grafico_service = service;
+	Label8->Caption = FloatToStrF(service,ffFixed,10,2);
+
+
+	Chart1->Refresh();
+	Chart2->Refresh();
+
+	Fuzzy();
+
+	VaComm1->WriteText(gorjeta/14.9);   } }
+
+	else{
+	Fuzzy();
+	VaComm1->WriteText(int(gorjeta/14.91));
+	Memo1->Lines->Add(int(gorjeta/14.91)); // Adicione os dados recebidos ao TMemo
+	}
+
+}
+
+
+
+
+
+void __fastcall TFmFuzzy::Image1Click(TObject *Sender)
+{
+ShellExecute(0, L"open", L"https://www.unoesc.edu.br/", NULL, NULL, SW_SHOWMAXIMIZED);
+}
+//---------------------------------------------------------------------------
+
